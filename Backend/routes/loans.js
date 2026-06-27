@@ -1,5 +1,6 @@
 const express                    = require('express');
 const { body, validationResult } = require('express-validator');
+const mongoose                   = require('mongoose');
 const auth                       = require('../middleware/auth');
 const Loan                       = require('../models/Loan');
 const User                       = require('../models/User');
@@ -8,10 +9,23 @@ const router                     = express.Router();
 
 // ─── POST /api/loans/request ──────────────────────────────────
 // Borrower creates a new loan request
+// Amount is in WEI (string), duration is in SECONDS — matches smart contract
 router.post('/request', auth, [
-  body('amount').isNumeric().withMessage('Amount must be a number').custom(v => v > 0),
-  body('duration').isInt({ min: 1, max: 60 }).withMessage('Duration must be 1–60 months'),
-  body('purpose').trim().notEmpty().withMessage('Purpose is required')
+  body('amount')
+    .notEmpty().withMessage('Amount is required')
+    .isNumeric().withMessage('Amount must be a number')
+    .custom(v => Number(v) > 0).withMessage('Amount must be greater than 0'),
+  body('duration')
+    .isInt({ min: 86400, max: 31536000 })
+    .withMessage('Duration must be between 86400 (1 day) and 31536000 (1 year) in seconds'),
+  body('interestRate')
+    .optional()
+    .isInt({ min: 0, max: 50 })
+    .withMessage('Interest rate must be between 0 and 50'),
+  body('purpose')
+    .trim()
+    .notEmpty()
+    .withMessage('Purpose is required')
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty())
@@ -19,30 +33,31 @@ router.post('/request', auth, [
 
   try {
     const { amount, duration, purpose, interestRate } = req.body;
+    const rate = interestRate || 5;
 
-    // Get borrower's current credit score and attach it as a snapshot
-    const user = await User.findById(req.user.id);
-     
+    // ── Enforce same 3-loan limit as smart contract ──
+    const activeLoans = await Loan.countDocuments({
+      borrower: req.user.id,
+      status: { $in: ['pending', 'active'] }
+    });
+    if (activeLoans >= 3)
+      return res.status(400).json({ msg: 'Maximum of 3 active loans allowed per borrower' });
+
+    // ── Snapshot credit score at time of request ──
+    const user          = await User.findById(req.user.id);
     const scoreSnapshot = calculateCreditScore(user.lendingHistory);
 
-    // Generate a simple repayment schedule
-    const monthlyPayment = parseFloat(
-      ((amount * (1 + (interestRate || 5) / 100)) / duration).toFixed(2)
-    );
-    const schedule = [];
-    for (let i = 1; i <= duration; i++) {
-      const dueDate = new Date();
-      dueDate.setMonth(dueDate.getMonth() + i);
-      schedule.push({ dueDate, amount: monthlyPayment });
-    }
+    // ── Repayment amount matches smart contract formula exactly ──
+    // Contract: amount + (amount / 100) * interestRate
+    const repaymentAmount = (BigInt(amount) + (BigInt(amount) * BigInt(rate)) / BigInt(100)).toString();
 
     const loan = new Loan({
-      borrower: req.user.id,
-      amount,
-      duration,
+      borrower:          req.user.id,
+      amount:            amount.toString(),   // store as string to preserve Wei precision
+      duration,                               // in seconds
       purpose,
-      interestRate: interestRate || 5,
-      repaymentSchedule: schedule,
+      interestRate:      rate,
+      repaymentAmount,                        // total Wei borrower must repay in one tx
       creditScoreAtTime: scoreSnapshot
     });
 
@@ -54,7 +69,7 @@ router.post('/request', auth, [
 });
 
 // ─── GET /api/loans/marketplace ───────────────────────────────
-// Public list of pending loans — Role 6 (Lender Marketplace) calls this
+// All pending loans — Role 6 Lender Marketplace calls this
 router.get('/marketplace', auth, async (req, res) => {
   try {
     const loans = await Loan.find({ status: 'pending' })
@@ -67,7 +82,7 @@ router.get('/marketplace', auth, async (req, res) => {
 });
 
 // ─── GET /api/loans/my-loans ──────────────────────────────────
-// Logged-in borrower sees their own loans — Role 5 (Borrower Dashboard) calls this
+// Borrower sees their own loans — Role 5 Borrower Dashboard
 router.get('/my-loans', auth, async (req, res) => {
   try {
     const loans = await Loan.find({ borrower: req.user.id })
@@ -79,7 +94,7 @@ router.get('/my-loans', auth, async (req, res) => {
 });
 
 // ─── GET /api/loans/my-lendings ───────────────────────────────
-// Logged-in lender sees loans they have funded
+
 router.get('/my-lendings', auth, async (req, res) => {
   try {
     const loans = await Loan.find({ lender: req.user.id })
@@ -92,9 +107,12 @@ router.get('/my-lendings', auth, async (req, res) => {
 });
 
 // ─── GET /api/loans/:id ───────────────────────────────────────
-// Get a single loan's full details
+// Single loan full details
 router.get('/:id', auth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id))
+      return res.status(400).json({ msg: 'Invalid loan ID' });
+
     const loan = await Loan.findById(req.params.id)
       .populate('borrower', 'name walletAddress')
       .populate('lender',   'name walletAddress');
@@ -106,17 +124,26 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // ─── PATCH /api/loans/:id/fund ────────────────────────────────
-// Lender funds a loan — called after MetaMask tx is confirmed (Role 6)
+// Called by Role 4 event listener when LoanFunded event fires on-chain
+// Links the MongoDB loan to the blockchain loan
 router.patch('/:id/fund', auth, [
-  body('contractAddress').notEmpty().withMessage('Contract address is required')
+  body('contractAddress')
+    .notEmpty().withMessage('Contract address is required')
+    .matches(/^0x[a-fA-F0-9]{40}$/).withMessage('Invalid contract address format'),
+  body('onChainLoanId')
+    .isInt({ min: 0 }).withMessage('On-chain loan ID is required')
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty())
     return res.status(400).json({ errors: errors.array() });
 
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id))
+      return res.status(400).json({ msg: 'Invalid loan ID' });
+
     const loan = await Loan.findById(req.params.id);
-    if (!loan)          return res.status(404).json({ msg: 'Loan not found' });
+    if (!loan)
+      return res.status(404).json({ msg: 'Loan not found' });
     if (loan.status !== 'pending')
       return res.status(400).json({ msg: 'Loan is no longer available' });
     if (loan.borrower.toString() === req.user.id)
@@ -125,6 +152,7 @@ router.patch('/:id/fund', auth, [
     loan.lender          = req.user.id;
     loan.status          = 'active';
     loan.contractAddress = req.body.contractAddress;
+    loan.onChainLoanId   = req.body.onChainLoanId;  // links to smart contract loans[] index
     await loan.save();
 
     res.json({ msg: 'Loan funded successfully', loan });
@@ -134,42 +162,70 @@ router.patch('/:id/fund', auth, [
 });
 
 // ─── PATCH /api/loans/:id/repay ───────────────────────────────
-// Mark an installment as paid — called after blockchain confirmation (Role 4 event listener also does this)
-router.patch('/:id/repay', auth, [
-  body('installmentIndex').isInt({ min: 0 }).withMessage('Valid installment index required')
-], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty())
-    return res.status(400).json({ errors: errors.array() });
-
+// Called by Role 4 event listener when LoanRepaid event fires on-chain
+// Updates DB status and borrower's credit history
+router.patch('/:id/repay', auth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id))
+      return res.status(400).json({ msg: 'Invalid loan ID' });
+
     const loan = await Loan.findById(req.params.id);
-    if (!loan) return res.status(404).json({ msg: 'Loan not found' });
+    if (!loan)
+      return res.status(404).json({ msg: 'Loan not found' });
     if (loan.borrower.toString() !== req.user.id)
       return res.status(403).json({ msg: 'Unauthorized' });
+    if (loan.status === 'repaid')
+      return res.status(400).json({ msg: 'Loan already marked as repaid' });
+    if (loan.status !== 'active')
+      return res.status(400).json({ msg: 'Loan is not active' });
 
-    const { installmentIndex } = req.body;
-    const installment = loan.repaymentSchedule[installmentIndex];
-    if (!installment)
-      return res.status(400).json({ msg: 'Installment not found' });
-    if (installment.paid)
-      return res.status(400).json({ msg: 'Already paid' });
-
-    // Mark installment paid
-    installment.paid   = true;
-    installment.paidAt = new Date();
-
-    // Check if loan is late
-    if (new Date() > installment.dueDate) {
-      installment.latePenalty = parseFloat((installment.amount * 0.05).toFixed(2));
-    }
-
-    // Check if all installments are paid — close the loan
-    const allPaid = loan.repaymentSchedule.every(s => s.paid);
-    if (allPaid) loan.status = 'repaid';
-
+    // Mark loan repaid
+    loan.status = 'repaid';
     await loan.save();
-    res.json({ msg: 'Installment recorded', loan });
+
+    // ── Update borrower credit history ──
+    // This is what feeds back into the credit score algorithm
+    await User.findByIdAndUpdate(req.user.id, {
+      $inc: {
+        'lendingHistory.loansRepaidOnTime': 1,
+        'lendingHistory.totalLoansCompleted': 1
+      }
+    });
+
+    res.json({ msg: 'Loan marked as repaid', loan });
+  } catch (err) {
+    res.status(500).json({ msg: 'Server error', error: err.message });
+  }
+});
+
+// ─── PATCH /api/loans/:id/default ─────────────────────────────
+// Called by Role 4 event listener when LoanDefaulted event fires on-chain
+// Updates DB status and penalises borrower credit score
+router.patch('/:id/default', auth, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id))
+      return res.status(400).json({ msg: 'Invalid loan ID' });
+
+    const loan = await Loan.findById(req.params.id);
+    if (!loan)
+      return res.status(404).json({ msg: 'Loan not found' });
+    if (loan.status === 'defaulted')
+      return res.status(400).json({ msg: 'Loan already marked as defaulted' });
+    if (loan.status !== 'active')
+      return res.status(400).json({ msg: 'Loan is not active' });
+
+    loan.status = 'defaulted';
+    await loan.save();
+
+    // ── Penalise borrower credit history ──
+    await User.findByIdAndUpdate(loan.borrower, {
+      $inc: {
+        'lendingHistory.defaults': 1,
+        'lendingHistory.latePayments': 1
+      }
+    });
+
+    res.json({ msg: 'Loan marked as defaulted', loan });
   } catch (err) {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
