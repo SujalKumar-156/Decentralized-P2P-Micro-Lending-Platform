@@ -9,7 +9,7 @@ const router                     = express.Router();
 
 // ─── POST /api/loans/request ──────────────────────────────────
 // Borrower creates a new loan request
-// Amount is in WEI (string), duration is in SECONDS — matches smart contract
+// Amount is in WEI (string), duration is in SECONDS 
 router.post('/request', auth, [
   body('amount')
     .notEmpty().withMessage('Amount is required')
@@ -35,7 +35,7 @@ router.post('/request', auth, [
     const { amount, duration, purpose, interestRate } = req.body;
     const rate = interestRate || 5;
 
-    // ── Enforce same 3-loan limit as smart contract ──
+    // ── Enforce same 3-loan limit 
     const activeLoans = await Loan.countDocuments({
       borrower: req.user.id,
       status: { $in: ['pending', 'active'] }
@@ -43,12 +43,11 @@ router.post('/request', auth, [
     if (activeLoans >= 3)
       return res.status(400).json({ msg: 'Maximum of 3 active loans allowed per borrower' });
 
-    // ── Snapshot credit score at time of request ──
+    // ── Snapshot credit score at time of request 
     const user          = await User.findById(req.user.id);
     const scoreSnapshot = calculateCreditScore(user.lendingHistory);
 
-    // ── Repayment amount matches smart contract formula exactly ──
-    // Contract: amount + (amount / 100) * interestRate
+    // ── Repayment amount 
     const repaymentAmount = (BigInt(amount) + (BigInt(amount) * BigInt(rate)) / BigInt(100)).toString();
 
     const loan = new Loan({
@@ -69,7 +68,7 @@ router.post('/request', auth, [
 });
 
 // ─── GET /api/loans/marketplace ───────────────────────────────
-// All pending loans — Role 6 Lender Marketplace calls this
+
 router.get('/marketplace', auth, async (req, res) => {
   try {
     const loans = await Loan.find({ status: 'pending' })
@@ -82,7 +81,7 @@ router.get('/marketplace', auth, async (req, res) => {
 });
 
 // ─── GET /api/loans/my-loans ──────────────────────────────────
-// Borrower sees their own loans — Role 5 Borrower Dashboard
+
 router.get('/my-loans', auth, async (req, res) => {
   try {
     const loans = await Loan.find({ borrower: req.user.id })
@@ -107,7 +106,7 @@ router.get('/my-lendings', auth, async (req, res) => {
 });
 
 // ─── GET /api/loans/:id ───────────────────────────────────────
-// Single loan full details
+
 router.get('/:id', auth, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id))
@@ -124,8 +123,8 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // ─── PATCH /api/loans/:id/fund ────────────────────────────────
-// Called by Role 4 event listener when LoanFunded event fires on-chain
-// Links the MongoDB loan to the blockchain loan
+
+
 router.patch('/:id/fund', auth, [
   body('contractAddress')
     .notEmpty().withMessage('Contract address is required')
@@ -162,8 +161,8 @@ router.patch('/:id/fund', auth, [
 });
 
 // ─── PATCH /api/loans/:id/repay ───────────────────────────────
-// Called by Role 4 event listener when LoanRepaid event fires on-chain
-// Updates DB status and borrower's credit history
+
+
 router.patch('/:id/repay', auth, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id))
@@ -184,7 +183,7 @@ router.patch('/:id/repay', auth, async (req, res) => {
     await loan.save();
 
     // ── Update borrower credit history ──
-    // This is what feeds back into the credit score algorithm
+    
     await User.findByIdAndUpdate(req.user.id, {
       $inc: {
         'lendingHistory.loansRepaidOnTime': 1,
@@ -199,8 +198,8 @@ router.patch('/:id/repay', auth, async (req, res) => {
 });
 
 // ─── PATCH /api/loans/:id/default ─────────────────────────────
-// Called by Role 4 event listener when LoanDefaulted event fires on-chain
-// Updates DB status and penalises borrower credit score
+
+
 router.patch('/:id/default', auth, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id))

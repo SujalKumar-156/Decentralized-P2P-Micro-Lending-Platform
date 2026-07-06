@@ -33,7 +33,7 @@ router.get('/score/:userId', auth, async (req, res) => {
     const score = calculateCreditScore(user.lendingHistory);
     const tier  = getCreditTier(score);
 
-    // Only expose score, tier, and name — never private data
+    // Only expose score, tier and name — never private data
     res.json({ name: user.name, score, ...tier });
   } catch (err) {
     res.status(500).json({ msg: 'Server error', error: err.message });
