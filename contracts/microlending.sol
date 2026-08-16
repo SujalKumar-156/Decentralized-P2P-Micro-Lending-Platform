@@ -70,7 +70,7 @@ mapping(address => uint256) public activeLoanCount;
         uint256 _interestRate,
         uint256 _duration
     ) external {
-        require(_amount > 0,         "Amount must be greater than 0");
+        require(_amount > 0,"Amount must be greater than 0");
         require(
         _duration >= MIN_DURATION,
         "Duration must be at least 1 day"
@@ -155,9 +155,9 @@ mapping(address => uint256) public activeLoanCount;
         );
 
         uint256 repaymentAmount = loan.amount +
-            (loan.amount /100 ) * loan.interestRate;
+            (loan.amount * loan.interestRate)/100;
 
-        require(msg.value >= repaymentAmount, "Insufficient repayment amount");
+        require(msg.value == repaymentAmount, "Insufficient repayment amount");
 
         // Update state BEFORE transfer (CEI + nonReentrant = double safety)
         loan.isRepaid = true;
@@ -168,13 +168,7 @@ mapping(address => uint256) public activeLoanCount;
                            .call{value: repaymentAmount}("");
         require(success, "Transfer to lender failed");
 
-        // Refund excess ETH to borrower if overpaid
-        if (msg.value > repaymentAmount) {
-            (bool refund, ) = payable(msg.sender)
-                              .call{value: msg.value - repaymentAmount}("");
-            require(refund, "Refund failed");
-        }
-
+       
         emit LoanRepaid(_loanId, msg.sender, repaymentAmount);
     }
 
@@ -195,7 +189,7 @@ mapping(address => uint256) public activeLoanCount;
             block.timestamp > loan.timestamp + loan.duration + 1 days,
             "Loan duration not expired yet"
         );
-        require(!loan.isRepaid, "Borrower has already repaid");
+
 
         loan.isDefaulted = true;
         activeLoanCount[loan.borrower]--;
