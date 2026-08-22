@@ -130,6 +130,7 @@ mapping(address => uint256) public activeLoanCount;
             msg.sender != loans[_loanId].borrower,
             "Borrower cannot fund own loan"
         );
+        require(!loans[_loanId].isCancelled, "Loan is cancelled");
 
         // Update state BEFORE transfer (CEI pattern)
         loans[_loanId].lender   = msg.sender;
