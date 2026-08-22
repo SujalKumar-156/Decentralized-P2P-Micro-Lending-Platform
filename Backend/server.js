@@ -1,23 +1,25 @@
-const express    = require('express');
-const mongoose   = require('mongoose');
-const cors       = require('cors');
-const rateLimit  = require('express-rate-limit');
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
+
+//Event Listener import
+const { startEventListener } = require('./listeners/eventListener')
 
 const app = express();
 
 const morgan = require('morgan');
 app.use(morgan('dev'));
-
 const helmet = require('helmet');
 app.use(helmet());
 
 // ─── Middleware ───────────────────────────────────────────────
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }));
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 
 app.use(express.json({ limit: '10kb' }));
@@ -36,15 +38,24 @@ app.use('/api/', limiter);
 
 // ─── Database connection ──────────────────────────────────────
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
+  .then(async () => {
+    console.log('✅ MongoDB connected');
+
+    //start event listener after database is connected
+    try {
+      await startEventListener();
+    } catch (err) {
+      console.error('❌ Failed to start Web3 Listener:', err.message);
+    }
+  })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err.message);
     process.exit(1);
   });
 
 // ─── Routes ──────────────────────────────────────────────────
-app.use('/api/auth',   require('./routes/auth'));
-app.use('/api/loans',  require('./routes/loans'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/loans', require('./routes/loans'));
 app.use('/api/credit', require('./routes/credit'));
 
 // ─── Health check ─────────────────────────────────────────────
@@ -68,11 +79,11 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(` Server running on port ${PORT}`));
 
 const shutdown = async (signal) => {
-    console.log(`${signal} received. Shutting down gracefully...`);
-    await mongoose.connection.close();
-    console.log('MongoDB connection closed.');
-    process.exit(0);
-  };
-  
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT',  () => shutdown('SIGINT'));
+  console.log(`${signal} received. Shutting down gracefully...`);
+  await mongoose.connection.close();
+  console.log('MongoDB connection closed.');
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

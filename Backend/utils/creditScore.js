@@ -4,13 +4,13 @@ function calculateCreditScore(history = {}) {
   let score = 500; // everyone starts at 500
 
   const {
-    totalLoans          = 0,
-    loansRepaidOnTime   = 0,
-    latePayments        = 0,
-    defaults            = 0,
+    totalLoans = 0,
+    loansRepaidOnTime = 0,
+    latePayments = 0,
+    defaults = 0,
     totalLoansCompleted = 0,
-    accountAgeMonths    = 0,
-    walletTransactions  = 0
+    accountAgeMonths = 0,
+    walletTransactions = 0
   } = history;
 
   // 1. Repayment rate 
@@ -36,13 +36,13 @@ function calculateCreditScore(history = {}) {
   return Math.max(0, Math.min(1000, Math.round(score)));
 }
 
- 
+
 function getCreditTier(score) {
-  if (score >= 750) return { tier: 'Excellent', risk: 'Very Low',  color: 'green'  };
-  if (score >= 600) return { tier: 'Good',      risk: 'Low',       color: 'blue'   };
-  if (score >= 450) return { tier: 'Fair',       risk: 'Medium',    color: 'amber'  };
-  if (score >= 300) return { tier: 'Poor',       risk: 'High',      color: 'orange' };
-  return                    { tier: 'Very Poor', risk: 'Very High', color: 'red'    };
+  if (score >= 750) return { tier: 'Excellent', risk: 'Very Low', color: 'green' };
+  if (score >= 600) return { tier: 'Good', risk: 'Low', color: 'blue' };
+  if (score >= 450) return { tier: 'Fair', risk: 'Medium', color: 'amber' };
+  if (score >= 300) return { tier: 'Poor', risk: 'High', color: 'orange' };
+  return { tier: 'Very Poor', risk: 'Very High', color: 'red' };
 }
 
 module.exports = { calculateCreditScore, getCreditTier };
