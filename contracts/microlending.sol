@@ -21,6 +21,8 @@ contract MicroLending is ReentrancyGuard {
 
 uint256 public constant MAX_LOANS_PER_BORROWER = 3;
 
+address public owner;
+
 constructor() {
     owner = msg.sender;
 }
@@ -42,8 +44,7 @@ mapping(address => uint256) public activeLoanCount;
         address indexed borrower,
         uint256 amount,
         uint256 interestRate,
-        uint256 duration,
-        uint256 timestamp
+        uint256 duration
     );
 
     event LoanFunded(
@@ -110,8 +111,7 @@ mapping(address => uint256) public activeLoanCount;
             msg.sender,
             _amount,
             _interestRate,
-            _duration,
-            block.timestamp
+            _duration
         );
     }
 
@@ -130,7 +130,6 @@ mapping(address => uint256) public activeLoanCount;
             msg.sender != loans[_loanId].borrower,
             "Borrower cannot fund own loan"
         );
-        require(!loans[_loanId].isCancelled, "Loan is cancelled");
 
         // Update state BEFORE transfer (CEI pattern)
         loans[_loanId].lender   = msg.sender;
