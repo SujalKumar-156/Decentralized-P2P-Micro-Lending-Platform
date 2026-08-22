@@ -21,8 +21,6 @@ contract MicroLending is ReentrancyGuard {
 
 uint256 public constant MAX_LOANS_PER_BORROWER = 3;
 
-address public owner;
-
 constructor() {
     owner = msg.sender;
 }
@@ -44,7 +42,8 @@ mapping(address => uint256) public activeLoanCount;
         address indexed borrower,
         uint256 amount,
         uint256 interestRate,
-        uint256 duration
+        uint256 duration,
+        uint256 timestamp
     );
 
     event LoanFunded(
@@ -111,7 +110,8 @@ mapping(address => uint256) public activeLoanCount;
             msg.sender,
             _amount,
             _interestRate,
-            _duration
+            _duration,
+            block.timestamp
         );
     }
 
