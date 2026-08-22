@@ -102,7 +102,8 @@ mapping(address => uint256) public activeLoanCount;
             timestamp:    block.timestamp,
             isFunded:     false,
             isRepaid:     false,
-            isDefaulted:  false
+            isDefaulted:  false,
+            isCancelled: false
         }));
 
         activeLoanCount[msg.sender]++;
