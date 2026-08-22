@@ -16,6 +16,7 @@ contract MicroLending is ReentrancyGuard {
         bool isFunded;
         bool isRepaid;
         bool isDefaulted;
+        bool isCancelled;
     }
 
 uint256 public constant MAX_LOANS_PER_BORROWER = 3;
@@ -63,6 +64,12 @@ mapping(address => uint256) public activeLoanCount;
         address indexed borrower,
         address indexed lender
     );
+
+    event LoanCancelled(
+        uint256 indexed loanId,
+        address indexed borrower
+    );
+
 
 
     function createLoan(
@@ -196,6 +203,24 @@ mapping(address => uint256) public activeLoanCount;
 
         emit LoanDefaulted(_loanId, loan.borrower, loan.lender);
     }
+
+    function cancelLoan(uint256 _loanId) 
+    external 
+    nonReentrant 
+{
+    require(_loanId < loans.length,       "Loan does not exist");
+    Loan storage loan = loans[_loanId];
+    require(loan.borrower == msg.sender,  "Only borrower can cancel");
+    require(!loan.isFunded,               "Cannot cancel funded loan");
+    require(!loan.isRepaid,               "Loan already repaid");
+    require(!loan.isDefaulted,            "Loan already defaulted");
+    require(!loan.isCancelled,            "Already cancelled");
+
+    loan.isCancelled = true;
+    activeLoanCount[msg.sender]--;
+
+    emit LoanCancelled(_loanId, msg.sender);
+}
 
 
     // VIEW FUNCTIONS (free — no gas)
