@@ -32,6 +32,25 @@ Sepolia Testnet
 				"internalType": "address",
 				"name": "borrower",
 				"type": "address"
+			}
+		],
+		"name": "LoanCancelled",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "loanId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "borrower",
+				"type": "address"
 			},
 			{
 				"indexed": false,
@@ -192,6 +211,19 @@ Sepolia Testnet
 		"inputs": [
 			{
 				"internalType": "uint256",
+				"name": "_loanId",
+				"type": "uint256"
+			}
+		],
+		"name": "cancelLoan",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
 				"name": "_amount",
 				"type": "uint256"
 			},
@@ -279,6 +311,11 @@ Sepolia Testnet
 						"internalType": "bool",
 						"name": "isDefaulted",
 						"type": "bool"
+					},
+					{
+						"internalType": "bool",
+						"name": "isCancelled",
+						"type": "bool"
 					}
 				],
 				"internalType": "struct MicroLending.Loan[]",
@@ -349,6 +386,11 @@ Sepolia Testnet
 					{
 						"internalType": "bool",
 						"name": "isDefaulted",
+						"type": "bool"
+					},
+					{
+						"internalType": "bool",
+						"name": "isCancelled",
 						"type": "bool"
 					}
 				],
@@ -456,6 +498,11 @@ Sepolia Testnet
 			{
 				"internalType": "bool",
 				"name": "isDefaulted",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "isCancelled",
 				"type": "bool"
 			}
 		],
