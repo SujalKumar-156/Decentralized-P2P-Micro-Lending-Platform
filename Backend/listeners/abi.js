@@ -1,13 +1,142 @@
-const CONTRACT_ADDRESS = "0xac2E4CEbD77909d41c3851F39E07B5D1dA73D6f2";
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 
 const CONTRACT_ABI = [
-    "event LoanCreated(uint256 indexed loanId, address indexed borrower, uint256 amount, uint256 interestRate, uint256 duration)",
-    "event LoanFunded(uint256 indexed loanId, address indexed lender, uint256 amount)",
-    "event LoanRepaid(uint256 indexed loanId, address indexed borrower, uint256 repaymentAmount)",
-    "event LoanDefaulted(uint256 indexed loanId, address indexed borrower, address indexed lender)"
+  { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
+  { "inputs": [], "name": "ReentrancyGuardReentrantCall", "type": "error" },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "loanId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "borrower", "type": "address" }
+    ],
+    "name": "LoanCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "loanId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "borrower", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "interestRate", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "duration", "type": "uint256" }
+    ],
+    "name": "LoanCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "loanId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "borrower", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "lender", "type": "address" }
+    ],
+    "name": "LoanDefaulted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "loanId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "lender", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "LoanFunded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "loanId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "borrower", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "repaymentAmount", "type": "uint256" }
+    ],
+    "name": "LoanRepaid",
+    "type": "event"
+  },
+  { "inputs": [], "name": "MAX_DURATION", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
+  { "inputs": [], "name": "MAX_LOANS_PER_BORROWER", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
+  { "inputs": [], "name": "MIN_DURATION", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
+  { "inputs": [{ "internalType": "address", "name": "", "type": "address" }], "name": "activeLoanCount", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
+  { "inputs": [{ "internalType": "uint256", "name": "_loanId", "type": "uint256" }], "name": "cancelLoan", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }, { "internalType": "uint256", "name": "_interestRate", "type": "uint256" }, { "internalType": "uint256", "name": "_duration", "type": "uint256" }], "name": "createLoan", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  { "inputs": [{ "internalType": "uint256", "name": "_loanId", "type": "uint256" }], "name": "fundLoan", "outputs": [], "stateMutability": "payable", "type": "function" },
+  {
+    "inputs": [],
+    "name": "getAllLoans",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint256", "name": "loanId", "type": "uint256" },
+          { "internalType": "address", "name": "borrower", "type": "address" },
+          { "internalType": "address", "name": "lender", "type": "address" },
+          { "internalType": "uint256", "name": "amount", "type": "uint256" },
+          { "internalType": "uint256", "name": "interestRate", "type": "uint256" },
+          { "internalType": "uint256", "name": "duration", "type": "uint256" },
+          { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+          { "internalType": "bool", "name": "isFunded", "type": "bool" },
+          { "internalType": "bool", "name": "isRepaid", "type": "bool" },
+          { "internalType": "bool", "name": "isDefaulted", "type": "bool" },
+          { "internalType": "bool", "name": "isCancelled", "type": "bool" }
+        ],
+        "internalType": "struct MicroLending.Loan[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_loanId", "type": "uint256" }],
+    "name": "getLoan",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint256", "name": "loanId", "type": "uint256" },
+          { "internalType": "address", "name": "borrower", "type": "address" },
+          { "internalType": "address", "name": "lender", "type": "address" },
+          { "internalType": "uint256", "name": "amount", "type": "uint256" },
+          { "internalType": "uint256", "name": "interestRate", "type": "uint256" },
+          { "internalType": "uint256", "name": "duration", "type": "uint256" },
+          { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+          { "internalType": "bool", "name": "isFunded", "type": "bool" },
+          { "internalType": "bool", "name": "isRepaid", "type": "bool" },
+          { "internalType": "bool", "name": "isDefaulted", "type": "bool" },
+          { "internalType": "bool", "name": "isCancelled", "type": "bool" }
+        ],
+        "internalType": "struct MicroLending.Loan",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  { "inputs": [{ "internalType": "uint256", "name": "_loanId", "type": "uint256" }], "name": "getRepaymentAmount", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
+  { "inputs": [{ "internalType": "uint256", "name": "_loanId", "type": "uint256" }], "name": "isLoanExpired", "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }], "stateMutability": "view", "type": "function" },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "loans",
+    "outputs": [
+      { "internalType": "uint256", "name": "loanId", "type": "uint256" },
+      { "internalType": "address", "name": "borrower", "type": "address" },
+      { "internalType": "address", "name": "lender", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "internalType": "uint256", "name": "interestRate", "type": "uint256" },
+      { "internalType": "uint256", "name": "duration", "type": "uint256" },
+      { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+      { "internalType": "bool", "name": "isFunded", "type": "bool" },
+      { "internalType": "bool", "name": "isRepaid", "type": "bool" },
+      { "internalType": "bool", "name": "isDefaulted", "type": "bool" },
+      { "internalType": "bool", "name": "isCancelled", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  { "inputs": [{ "internalType": "uint256", "name": "_loanId", "type": "uint256" }], "name": "markDefault", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  { "inputs": [], "name": "owner", "outputs": [{ "internalType": "address", "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
+  { "inputs": [{ "internalType": "uint256", "name": "_loanId", "type": "uint256" }], "name": "repayLoan", "outputs": [], "stateMutability": "payable", "type": "function" }
 ];
 
-module.exports = {
-    CONTRACT_ADDRESS,
-    CONTRACT_ABI
-};
+module.exports = { CONTRACT_ADDRESS, CONTRACT_ABI };

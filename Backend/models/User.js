@@ -11,13 +11,16 @@ const lendingHistorySchema = new mongoose.Schema({
 });
 
 const userSchema = new mongoose.Schema({
-  name:           { type: String,  required: true,  trim: true },
-  email:          { type: String,  required: true,  unique: true, lowercase: true },
-  password:       { type: String,  required: true },
-  walletAddress:  { type: String,  default: null },   // MetaMask wallet (Role 6 connects this)
-  role:           { type: String,  enum: ['borrower', 'lender', 'both'], default: 'borrower' },
-  lendingHistory: { type: lendingHistorySchema, default: () => ({}) },
-  createdAt:      { type: Date,    default: Date.now }
+  name:          { type: String, required: true,trim: true },
+  email:         { type: String, required: true,unique: true, lowercase: true },
+  password:      { type: String, required: true },
+  walletAddress: { type: String, default: null },
+  role:          { type: String, enum: ['borrower','lender','both'],default: 'borrower' },
+  lendingHistory:{ type: lendingHistorySchema, default: () => ({}) },
+  createdAt:     { type: Date,   default: Date.now }
 });
+
+// Indexes
+userSchema.index({ walletAddress: 1 }, { sparse: true }); // event listener credit lookups
 
 module.exports = mongoose.model('User', userSchema);
